@@ -1,6 +1,7 @@
 import React from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Bars3Icon, XMarkIcon, PhoneIcon, UserCircleIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Bars3Icon, XMarkIcon, PhoneIcon, UserCircleIcon, ChartBarIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
+import { useAuth } from '../context/AuthContext';
 
 const navigation = [
   { name: 'Dashboard', href: '/' },
@@ -17,6 +18,13 @@ function classNames(...classes) {
 export default function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -80,9 +88,21 @@ export default function Layout() {
                 <span className="text-sm">Reports</span>
               </button>
               <div className="h-6 w-px bg-gray-300"></div>
-              <button className="flex items-center text-gray-600 hover:text-primary-600 transition-colors duration-150">
-                <UserCircleIcon className="h-5 w-5 mr-1" />
-                <span className="text-sm">Admin</span>
+              <div className="relative">
+                <div className="flex items-center">
+                  <button onClick={() => navigate('/profile')} className="flex items-center text-gray-600 hover:text-primary-600 transition-colors duration-150">
+                    <UserCircleIcon className="h-5 w-5 mr-1" />
+                    <span className="text-sm">{user?.username || 'Profile'}</span>
+                  </button>
+                </div>
+              </div>
+              <div className="h-6 w-px bg-gray-300"></div>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center text-gray-600 hover:text-primary-600 transition-colors duration-150"
+              >
+                <ArrowRightOnRectangleIcon className="h-5 w-5 mr-1" />
+                <span className="text-sm">Logout</span>
               </button>
             </div>
           </div>
@@ -127,6 +147,28 @@ export default function Layout() {
                         {item.name}
                       </Link>
                     ))}
+                    <Link
+                      to="/profile"
+                      className={classNames(
+                        location.pathname === '/profile'
+                          ? 'bg-primary-50 text-primary-600 font-semibold'
+                          : 'text-gray-700 hover:bg-gray-50 hover:text-primary-600',
+                        'block rounded-lg px-3 py-2 text-base font-medium leading-7'
+                      )}
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      Profile
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="flex w-full items-center text-gray-700 hover:bg-gray-50 hover:text-primary-600 rounded-lg px-3 py-2 text-base font-medium leading-7"
+                    >
+                      <ArrowRightOnRectangleIcon className="h-5 w-5 mr-2" />
+                      <span>Logout</span>
+                    </button>
                   </div>
                   <div className="py-6">
                     <div className="space-y-2">

@@ -1,3 +1,4 @@
 from app.models.callback import Callback
+from app.models.user import User
 
-__all__ = ["Callback"]
+__all__ = ["Callback", "User"]

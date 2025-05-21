@@ -6,6 +6,14 @@ from app.schemas.callback import (
     CallbackResponse,
     CallbackFilterParams,
 )
+from app.schemas.user import (
+    User,
+    UserCreate,
+    UserUpdate,
+    UserInDB,
+    UserInDBBase,
+)
+from app.schemas.token import Token, TokenPayload
 
 __all__ = [
     "CallbackBase",
@@ -14,4 +22,11 @@ __all__ = [
     "CallbackInDB",
     "CallbackResponse",
     "CallbackFilterParams",
+    "User",
+    "UserCreate",
+    "UserUpdate",
+    "UserInDB",
+    "UserInDBBase",
+    "Token",
+    "TokenPayload",
 ]

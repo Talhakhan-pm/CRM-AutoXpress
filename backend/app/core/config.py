@@ -3,6 +3,7 @@ from typing import List
 import json
 from dotenv import load_dotenv
 import pytz
+from datetime import timedelta
 
 load_dotenv()
 
@@ -20,6 +21,13 @@ class Settings:
     
     # CORS settings
     BACKEND_CORS_ORIGINS_STR: str = os.getenv("BACKEND_CORS_ORIGINS", '["http://localhost:3000"]')
+    
+    # Security settings
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-for-development-only")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
+    
+    # Database settings
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./autoxpress_crm.db")
     
     @property
     def BACKEND_CORS_ORIGINS(self) -> List[str]:

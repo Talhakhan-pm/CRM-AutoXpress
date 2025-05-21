@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(alembic revision:*)",
+      "Bash(source:*)",
+      "Bash(alembic upgrade:*)",
+      "Bash(pip install:*)"
     ],
     "deny": []
   }
