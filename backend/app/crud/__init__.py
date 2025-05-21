@@ -5,6 +5,9 @@ from app.crud.callback import (
     update_callback,
     delete_callback,
     search_callbacks,
+    claim_callback,
+    unclaim_callback,
+    get_callback_as_dict,
 )
 from app.crud.user import (
     get,
@@ -18,6 +21,17 @@ from app.crud.user import (
     is_superuser,
 )
 
+from app.crud.callback_activity import (
+    create_activity,
+    get_activities_by_callback,
+    log_activity,
+    log_view_activity,
+    log_edit_activity,
+    log_status_change,
+    log_claim_activity,
+    log_unclaim_activity,
+)
+
 __all__ = [
     "get_callback",
     "get_callbacks", 
@@ -25,6 +39,9 @@ __all__ = [
     "update_callback", 
     "delete_callback",
     "search_callbacks",
+    "claim_callback",
+    "unclaim_callback",
+    "get_callback_as_dict",
     "get",
     "get_by_email",
     "get_by_username",
@@ -34,4 +51,12 @@ __all__ = [
     "authenticate",
     "is_active",
     "is_superuser",
+    "create_activity",
+    "get_activities_by_callback",
+    "log_activity",
+    "log_view_activity",
+    "log_edit_activity",
+    "log_status_change",
+    "log_claim_activity",
+    "log_unclaim_activity",
 ]

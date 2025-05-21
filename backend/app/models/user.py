@@ -16,5 +16,5 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
     
-    # Add relationships if needed
-    # callbacks = relationship("Callback", back_populates="owner")
+    # Relationships
+    activities = relationship("CallbackActivity", back_populates="user")

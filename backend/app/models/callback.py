@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, Date, Float, ForeignKey, func, text
+from sqlalchemy.orm import relationship
 from app.db.database import Base, get_current_time, TZDateTime
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql.expression import FunctionElement
@@ -45,3 +46,11 @@ class Callback(Base):
     last_modified = Column(TZDateTime, server_default=text("CURRENT_TIMESTAMP"), 
                            onupdate=datetime.now(tz=settings.TIMEZONE_OBJ))
     last_modified_by = Column(String(100), nullable=True)
+    
+    # Claim functionality
+    claimed_by = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    claimed_at = Column(TZDateTime, nullable=True)
+    
+    # Relationships
+    activities = relationship("CallbackActivity", back_populates="callback", cascade="all, delete")
+    claimed_user = relationship("User", foreign_keys=[claimed_by], backref="claimed_callbacks")

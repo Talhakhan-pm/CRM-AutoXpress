@@ -32,6 +32,7 @@ export default function CallbacksFilter({ onFilter }) {
     follow_up_date_end: null,
     status: 'All',
     agent_name: 'All',
+    claimed: null,
   });
 
   const handleFilterChange = (name, value) => {
@@ -61,6 +62,10 @@ export default function CallbacksFilter({ onFilter }) {
       apiFilters.agent_name = filters.agent_name;
     }
     
+    if (filters.claimed !== null) {
+      apiFilters.claimed = filters.claimed;
+    }
+    
     onFilter(apiFilters);
     setIsOpen(false);
   };
@@ -71,6 +76,7 @@ export default function CallbacksFilter({ onFilter }) {
       follow_up_date_end: null,
       status: 'All',
       agent_name: 'All',
+      claimed: null,
     });
     onFilter({});
     setIsOpen(false);
@@ -146,6 +152,44 @@ export default function CallbacksFilter({ onFilter }) {
                   </option>
                 ))}
               </select>
+            </div>
+            
+            <div className="mt-2">
+              <label className="block text-sm font-medium text-gray-700">Claimed Status</label>
+              <div className="mt-1 flex space-x-3">
+                <label className="inline-flex items-center">
+                  <input
+                    type="radio"
+                    name="claimed"
+                    checked={filters.claimed === null}
+                    onChange={() => handleFilterChange('claimed', null)}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">All</span>
+                </label>
+                
+                <label className="inline-flex items-center">
+                  <input
+                    type="radio"
+                    name="claimed"
+                    checked={filters.claimed === true}
+                    onChange={() => handleFilterChange('claimed', true)}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Claimed</span>
+                </label>
+                
+                <label className="inline-flex items-center">
+                  <input
+                    type="radio"
+                    name="claimed"
+                    checked={filters.claimed === false}
+                    onChange={() => handleFilterChange('claimed', false)}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">Unclaimed</span>
+                </label>
+              </div>
             </div>
 
             <div className="mt-4 flex justify-between px-2 pb-2">

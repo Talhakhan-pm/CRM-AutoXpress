@@ -1,10 +1,10 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
-from typing import List, Optional
-from datetime import date
+from typing import List, Optional, Dict, Any
+from datetime import date, datetime
 
 from app.models.callback import Callback
-from app.schemas.callback import CallbackCreate, CallbackUpdate, CallbackFilterParams
+from app.schemas.callback import CallbackCreate, CallbackUpdate, CallbackFilterParams, CallbackClaimRequest
 
 
 def get_callback(db: Session, callback_id: int) -> Optional[Callback]:
@@ -38,6 +38,19 @@ def get_callbacks(
         
         if filters.agent_name:
             query = query.filter(Callback.agent_name == filters.agent_name)
+            
+        # Filter by claim status
+        if filters.claimed is not None:
+            if filters.claimed:
+                # Show only claimed callbacks
+                query = query.filter(Callback.claimed_by.isnot(None))
+            else:
+                # Show only unclaimed callbacks
+                query = query.filter(Callback.claimed_by.is_(None))
+        
+        # Filter by specific user who claimed the callback
+        if filters.claimed_by:
+            query = query.filter(Callback.claimed_by == filters.claimed_by)
     
     # Order by follow-up date (most recent first) and then by last modified date
     return query.order_by(Callback.follow_up_date.desc(), Callback.last_modified.desc()).offset(skip).limit(limit).all()
@@ -70,6 +83,59 @@ def update_callback(db: Session, callback_id: int, callback: CallbackUpdate) -> 
     db.commit()
     db.refresh(db_callback)
     return db_callback
+
+
+def claim_callback(db: Session, callback_id: int, claim_data: CallbackClaimRequest) -> Optional[Callback]:
+    """
+    Claim a callback for a user
+    """
+    db_callback = get_callback(db, callback_id)
+    if not db_callback:
+        return None
+        
+    # Set claimed data
+    db_callback.claimed_by = claim_data.user_id
+    db_callback.claimed_at = datetime.now()
+    
+    db.commit()
+    db.refresh(db_callback)
+    return db_callback
+
+
+def unclaim_callback(db: Session, callback_id: int) -> Optional[Callback]:
+    """
+    Release a claimed callback
+    """
+    db_callback = get_callback(db, callback_id)
+    if not db_callback:
+        return None
+        
+    # Clear claimed data
+    db_callback.claimed_by = None
+    db_callback.claimed_at = None
+    
+    db.commit()
+    db.refresh(db_callback)
+    return db_callback
+
+
+def get_callback_as_dict(db: Session, callback_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Get a callback as a dictionary (useful for activity tracking)
+    """
+    db_callback = get_callback(db, callback_id)
+    if not db_callback:
+        return None
+        
+    # Convert SQLAlchemy model to dict
+    callback_dict = {c.name: getattr(db_callback, c.name) for c in db_callback.__table__.columns}
+    
+    # Convert date/datetime objects to strings
+    for key, value in callback_dict.items():
+        if isinstance(value, (date, datetime)):
+            callback_dict[key] = str(value)
+            
+    return callback_dict
 
 
 def delete_callback(db: Session, callback_id: int) -> bool:

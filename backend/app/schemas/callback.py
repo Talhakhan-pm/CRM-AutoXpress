@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, model_validator, root_validator
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import date, datetime, timezone
 import pytz
 from app.core.config import settings
@@ -58,6 +58,8 @@ class CallbackInDB(CallbackBase):
     created_at: datetime
     last_modified: datetime
     last_modified_by: Optional[str] = None
+    claimed_by: Optional[str] = None
+    claimed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -79,6 +81,13 @@ class CallbackInDB(CallbackBase):
             # Convert to Pacific time
             self.last_modified = self.last_modified.astimezone(settings.TIMEZONE_OBJ)
             
+        if hasattr(self, 'claimed_at') and self.claimed_at:
+            if self.claimed_at.tzinfo is None:
+                # Add UTC timezone if no timezone information
+                self.claimed_at = self.claimed_at.replace(tzinfo=timezone.utc)
+            # Convert to Pacific time
+            self.claimed_at = self.claimed_at.astimezone(settings.TIMEZONE_OBJ)
+            
         return self
 
 
@@ -97,3 +106,12 @@ class CallbackFilterParams(BaseModel):
     follow_up_date_end: Optional[date] = None
     status: Optional[str] = None
     agent_name: Optional[str] = None
+    claimed: Optional[bool] = None
+    claimed_by: Optional[str] = None
+
+
+class CallbackClaimRequest(BaseModel):
+    """
+    Schema for claiming/unclaiming a callback
+    """
+    user_id: str

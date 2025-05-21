@@ -7,7 +7,7 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { format } from 'date-fns';
-import { ChevronUpIcon, ChevronDownIcon, PencilIcon, TrashIcon, PhoneIcon, CalendarIcon, UserIcon } from '@heroicons/react/24/outline';
+import { ChevronUpIcon, ChevronDownIcon, PencilIcon, TrashIcon, PhoneIcon, CalendarIcon, UserIcon, FlagIcon } from '@heroicons/react/24/outline';
 
 // Format phone number to US format
 const formatPhoneNumber = (value) => {
@@ -226,10 +226,18 @@ export default function CallbacksTable({ data, onEdit, onDelete }) {
       ),
       cell: info => {
         const value = info.getValue();
-        return value ? (
-          <div className="text-gray-700">{value}</div>
-        ) : (
-          <span className="text-gray-400">-</span>
+        const isClaimed = info.row.original.claimed_by;
+        return (
+          <div className="flex items-center">
+            {isClaimed && (
+              <FlagIcon className="h-4 w-4 text-purple-500 mr-1.5" title="Claimed" />
+            )}
+            {value ? (
+              <div className={`text-gray-700 ${isClaimed ? 'font-medium' : ''}`}>{value}</div>
+            ) : (
+              <span className="text-gray-400">-</span>
+            )}
+          </div>
         );
       }
     }),
