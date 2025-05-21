@@ -9,6 +9,29 @@ import {
 import { format } from 'date-fns';
 import { ChevronUpIcon, ChevronDownIcon, PencilIcon, TrashIcon, PhoneIcon, CalendarIcon, UserIcon } from '@heroicons/react/24/outline';
 
+// Format phone number to US format
+const formatPhoneNumber = (value) => {
+  if (!value) return value;
+  
+  // Remove all non-digit characters
+  const phoneNumber = value.replace(/\D/g, '');
+  
+  // Handle US phone with or without country code
+  let formattedNumber;
+  if (phoneNumber.length === 10) {
+    // Format as (XXX) XXX-XXXX
+    formattedNumber = phoneNumber.replace(/(\d{3})(\d{3})(\d{4})/, '($1) $2-$3');
+  } else if (phoneNumber.length === 11 && phoneNumber.startsWith('1')) {
+    // Handle with country code (assuming US +1)
+    formattedNumber = phoneNumber.replace(/(\d{1})(\d{3})(\d{3})(\d{4})/, '+$1 ($2) $3-$4');
+  } else {
+    // Just return original if not a standard format
+    return value;
+  }
+  
+  return formattedNumber;
+};
+
 const columnHelper = createColumnHelper();
 
 // Status badge component
@@ -122,14 +145,19 @@ export default function CallbacksTable({ data, onEdit, onDelete }) {
     }),
     columnHelper.accessor('callback_number', {
       header: 'Phone',
-      cell: info => (
-        <div className="flex items-center">
-          <PhoneIcon className="h-4 w-4 text-gray-400 mr-1.5" />
-          <a href={`tel:${info.getValue()}`} className="text-primary-600 hover:text-primary-800 hover:underline" onClick={e => e.stopPropagation()}>
-            {info.getValue()}
-          </a>
-        </div>
-      ),
+      cell: info => {
+        const rawNumber = info.getValue();
+        const formattedNumber = formatPhoneNumber(rawNumber);
+        
+        return (
+          <div className="flex items-center">
+            <PhoneIcon className="h-4 w-4 text-gray-400 mr-1.5" />
+            <a href={`tel:${rawNumber}`} className="text-primary-600 hover:text-primary-800 hover:underline" onClick={e => e.stopPropagation()}>
+              {formattedNumber || rawNumber}
+            </a>
+          </div>
+        );
+      },
     }),
     columnHelper.accessor(row => `${row.car_year || ''} ${row.car_make || ''} ${row.car_model || ''}`.trim(), {
       id: 'vehicle',
