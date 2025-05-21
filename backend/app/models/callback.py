@@ -1,6 +1,24 @@
-from sqlalchemy import Column, Integer, String, Text, Date, DateTime, Float, ForeignKey
-from sqlalchemy.sql import func
-from app.db.database import Base
+from sqlalchemy import Column, Integer, String, Text, Date, Float, ForeignKey, func, text
+from app.db.database import Base, get_current_time, TZDateTime
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.expression import FunctionElement
+from datetime import datetime, timezone
+import pytz
+from app.core.config import settings
+
+
+# Custom function to use timezone-aware now() function
+class TimestampFunction(FunctionElement):
+    name = 'now_tz'
+    inherit_cache = True
+
+@compiles(TimestampFunction, 'sqlite')
+def sqlite_timestamp(element, compiler, **kw):
+    """SQLite implementation of timezone-aware timestamp"""
+    return "CURRENT_TIMESTAMP"
+
+# Use this instead of func.now() for timezone-aware timestamps
+now_tz = TimestampFunction()
 
 
 class Callback(Base):
@@ -22,6 +40,8 @@ class Callback(Base):
     agent_name = Column(String(100), nullable=True)
     lead_score = Column(Float, nullable=True)
     comments = Column(Text, nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_modified = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    # Use our custom TZDateTime type to ensure proper timezone handling
+    created_at = Column(TZDateTime, server_default=text("CURRENT_TIMESTAMP"))
+    last_modified = Column(TZDateTime, server_default=text("CURRENT_TIMESTAMP"), 
+                           onupdate=datetime.now(tz=settings.TIMEZONE_OBJ))
     last_modified_by = Column(String(100), nullable=True)

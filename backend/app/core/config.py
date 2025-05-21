@@ -2,6 +2,7 @@ import os
 from typing import List
 import json
 from dotenv import load_dotenv
+import pytz
 
 load_dotenv()
 
@@ -9,6 +10,10 @@ load_dotenv()
 class Settings:
     APP_NAME: str = os.getenv("APP_NAME", "AutoXpress CRM")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
+    
+    # Timezone settings
+    TIMEZONE: str = os.getenv("TIMEZONE", "America/Los_Angeles")  # US Pacific Time (San Diego, CA)
+    TIMEZONE_OBJ = pytz.timezone(TIMEZONE)
     
     # API settings
     API_V1_STR: str = "/api/v1"

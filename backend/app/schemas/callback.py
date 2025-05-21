@@ -1,6 +1,8 @@
-from pydantic import BaseModel, Field
-from typing import Optional
-from datetime import date, datetime
+from pydantic import BaseModel, Field, model_validator, root_validator
+from typing import Optional, Dict, Any
+from datetime import date, datetime, timezone
+import pytz
+from app.core.config import settings
 
 
 class CallbackBase(BaseModel):
@@ -59,6 +61,25 @@ class CallbackInDB(CallbackBase):
 
     class Config:
         from_attributes = True
+        
+    # Convert UTC datetime to Pacific timezone
+    @model_validator(mode='after')
+    def convert_timezone(self) -> 'CallbackInDB':
+        if hasattr(self, 'created_at') and self.created_at:
+            if self.created_at.tzinfo is None:
+                # Add UTC timezone if no timezone information
+                self.created_at = self.created_at.replace(tzinfo=timezone.utc)
+            # Convert to Pacific time
+            self.created_at = self.created_at.astimezone(settings.TIMEZONE_OBJ)
+            
+        if hasattr(self, 'last_modified') and self.last_modified:
+            if self.last_modified.tzinfo is None:
+                # Add UTC timezone if no timezone information
+                self.last_modified = self.last_modified.replace(tzinfo=timezone.utc)
+            # Convert to Pacific time
+            self.last_modified = self.last_modified.astimezone(settings.TIMEZONE_OBJ)
+            
+        return self
 
 
 class CallbackResponse(CallbackInDB):
