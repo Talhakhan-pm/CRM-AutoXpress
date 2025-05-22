@@ -148,6 +148,7 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
   const [isLoadingActivities, setIsLoadingActivities] = useState(false);
   const [loadingError, setLoadingError] = useState(null);
   const [selectedTab, setSelectedTab] = useState(0);
+  const [activeFilters, setActiveFilters] = useState([]); // Store active filters
   
   // Update formatted phone when callback_number changes
   useEffect(() => {
@@ -158,6 +159,14 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
     }
   }, [callbackNumber]);
   
+  // Handle status changes to manage follow-up date
+  useEffect(() => {
+    // If status changes away from Follow-up Later, clear the follow-up date
+    if (status !== 'Follow-up Later') {
+      setValue('follow_up_date', null);
+    }
+  }, [status, setValue]);
+
   // Calculate lead score automatically based on form data
   useEffect(() => {
     // Base score starts at 5 (middle of 0-10 range)
@@ -240,6 +249,17 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
   }, [isOpen, callback, reset, user]);
 
   const onSubmit = (data) => {
+    // Validate follow-up date when status is "Follow-up Later"
+    if (data.status === 'Follow-up Later' && !data.follow_up_date) {
+      alert('Please select a follow-up date when status is "Follow-up Later"');
+      return;
+    }
+    
+    // If status is not "Follow-up Later", clear the follow-up date
+    if (data.status !== 'Follow-up Later') {
+      data.follow_up_date = null;
+    }
+    
     // Format the date back to ISO string for the API
     const formattedData = {
       ...data,
@@ -252,6 +272,306 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
     
     onSave(formattedData);
     onClose();
+  };
+
+  // Function to check if an edit activity should be filtered
+  const shouldFilterEditActivity = (activity) => {
+    if (activity.activity_type !== 'edit' || !activity.description.includes('Updated')) {
+      return false;
+    }
+
+    // Extract the fields that were changed
+    const updateText = activity.description.split('Updated')[1]?.trim();
+    if (!updateText) return false;
+    
+    const match = updateText.match(/(\d+) fields?: (.*)/);
+    if (!match) return false;
+    
+    // Get the fields text
+    const fieldsText = match[2];
+    const fieldsList = fieldsText.includes('... and') ? fieldsText.split('... and')[0] : fieldsText;
+    
+    // Contains status change or lead_score change
+    const hasStatusChange = fieldsList.includes('status:');
+    const hasLeadScoreChange = fieldsList.includes('lead_score:');
+    
+    return hasStatusChange || hasLeadScoreChange;
+  };
+  
+  // Function to filter status and lead_score changes from edit activities
+  const filterEditActivity = (activity) => {
+    if (activity.activity_type !== 'edit' || !activity.description.includes('Updated') || !shouldFilterEditActivity(activity)) {
+      // If it's not an edit activity or doesn't need filtering, return it as is
+      return activity;
+    }
+    
+    // Get the fields that were changed
+    const updateText = activity.description.split('Updated')[1]?.trim();
+    const match = updateText.match(/(\d+) fields?: (.*)/);
+    const fieldsText = match[2];
+    const fieldsList = fieldsText.includes('... and') ? fieldsText.split('... and')[0] : fieldsText;
+    
+    // Check if there are any fields besides status and lead_score
+    const hasOnlyStatusAndLeadScore = fieldsList.split(',')
+      .map(s => s.trim())
+      .every(s => {
+        const field = s.split(':')[0].trim();
+        return field === 'status' || field === 'lead_score' || field === 'last_modified' || field === 'last_modified_by';
+      });
+    
+    // If only status and/or lead_score changed, filter out the entire activity
+    if (hasOnlyStatusAndLeadScore) {
+      return null; // Will be filtered out later
+    }
+    
+    // Otherwise mark it for filtering specific fields
+    const modifiedActivity = { ...activity };
+    modifiedActivity.customFilter = true;
+    
+    return modifiedActivity;
+  };
+
+  // Function to group activities by date
+  const groupActivitiesByDate = (activitiesToGroup) => {
+    // Process all activities to filter status and lead_score changes
+    const processedActivities = activitiesToGroup
+      .map(filterEditActivity)
+      .filter(activity => activity !== null); // Remove any completely filtered activities
+    
+    // Filter activities if filters are active
+    const filteredActivities = activeFilters.length > 0
+      ? processedActivities.filter(activity => activeFilters.includes(activity.activity_type))
+      : processedActivities;
+
+    // Create date groups
+    const groups = filteredActivities.reduce((acc, activity) => {
+      const date = new Date(activity.created_at);
+      const today = new Date();
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      // Format as YYYY-MM-DD for grouping
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const todayStr = format(today, 'yyyy-MM-dd');
+      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+      
+      // Create friendly label
+      let dateLabel;
+      if (dateStr === todayStr) {
+        dateLabel = 'Today';
+      } else if (dateStr === yesterdayStr) {
+        dateLabel = 'Yesterday';
+      } else {
+        dateLabel = format(date, 'MMMM d, yyyy');
+      }
+      
+      if (!acc[dateStr]) {
+        acc[dateStr] = {
+          label: dateLabel,
+          activities: []
+        };
+      }
+      
+      acc[dateStr].activities.push(activity);
+      return acc;
+    }, {});
+    
+    // Convert to array and sort by date (newest first)
+    return Object.keys(groups)
+      .sort((a, b) => new Date(b) - new Date(a))
+      .map(dateKey => {
+        return {
+          dateKey,
+          label: groups[dateKey].label,
+          activities: groups[dateKey].activities
+        };
+      });
+  };
+
+  // Render an activity item
+  const renderActivity = (activity) => {
+    // Get the appropriate username for avatar
+    const username = activity.user?.username || 
+      (activity.user_id === "Admin User" ? "Admin" : 
+      (activity.user_id === "c7236aa1-2591-4b0f-b619-e9a69fb86c4b" && !activity.user ? "jannet" : 
+      activity.user_id || 'System'));
+    
+    // Get first letter capitalized for avatar
+    const initial = username.charAt(0).toUpperCase();
+    
+    // Color based on username (consistent color for same user)
+    const colors = [
+      'bg-blue-100 text-blue-800', 
+      'bg-amber-100 text-amber-800',
+      'bg-emerald-100 text-emerald-800', 
+      'bg-purple-100 text-purple-800',
+      'bg-rose-100 text-rose-800'
+    ];
+    
+    // Simple hash function to pick color
+    const colorIndex = username.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
+    const avatarColor = colors[colorIndex];
+
+    return (
+      <div key={activity.id} className="relative flex items-start">
+        {/* Activity dot in the timeline */}
+        <div className="absolute left-3 -ml-1.5 mt-1.5">
+          <div className={`h-3 w-3 rounded-full border-2 border-white ${ACTIVITY_TYPE_CONFIG[activity.activity_type]?.bgColor || 'bg-gray-200'}`}></div>
+        </div>
+        
+        {/* Activity card - minimalist design */}
+        <div className="ml-8 flex-1 mb-5">
+          <div className="flex items-start gap-2">
+            {/* User Avatar with Initials */}
+            <div className={`flex-shrink-0 h-6 w-6 rounded-full flex items-center justify-center text-xs font-medium ${avatarColor}`}>
+              {initial}
+            </div>
+          
+            {/* Activity icon */}
+            <div className={`flex-shrink-0 mt-0.5 ${ACTIVITY_TYPE_CONFIG[activity.activity_type]?.bgColor || 'bg-gray-100'} ${ACTIVITY_TYPE_CONFIG[activity.activity_type]?.color || 'text-gray-600'} p-1 rounded-md`}>
+              {ACTIVITY_TYPE_CONFIG[activity.activity_type]?.icon || (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 13.5V3.75m0 9.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 3.75V16.5m12-3V3.75m0 9.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 3.75V16.5m-6-9V3.75m0 3.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 9.75V10.5" />
+                </svg>
+              )}
+            </div>
+            
+            {/* Activity content */}
+            <div className="flex-1">
+              <div className="flex justify-between">
+                <div className="text-sm">
+                  <span className="font-medium text-gray-900">
+                    {username}
+                  </span>
+                  <span className="text-gray-500"> {ACTIVITY_TYPE_CONFIG[activity.activity_type]?.label || activity.activity_type}</span>
+                </div>
+                <time dateTime={new Date(activity.created_at).toISOString()} className="text-xs text-gray-400">
+                  {format(new Date(activity.created_at), 'MMM d, h:mm a')}
+                </time>
+              </div>
+              
+              {/* Edit details formatting - Improved display */}
+              {activity.activity_type === 'edit' && activity.description.includes('Updated') && (
+                <div className="mt-2 text-xs bg-gray-50 rounded-md overflow-hidden border border-gray-100">
+                  <div className="px-3 py-1.5 bg-gray-100 text-gray-700 font-medium">
+                    <span className="flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 mr-1 text-amber-500">
+                        <path d="M5.433 13.917l1.262-3.155A4 4 0 017.58 9.42l6.92-6.918a2.121 2.121 0 013 3l-6.92 6.918c-.383.383-.84.685-1.343.886l-3.154 1.262a.5.5 0 01-.65-.65z" />
+                        <path d="M3.5 5.75c0-.69.56-1.25 1.25-1.25H10A.75.75 0 0010 3H4.75A2.75 2.75 0 002 5.75v9.5A2.75 2.75 0 004.75 18h9.5A2.75 2.75 0 0017 15.25V10a.75.75 0 00-1.5 0v5.25c0 .69-.56 1.25-1.25 1.25h-9.5c-.69 0-1.25-.56-1.25-1.25v-9.5z" />
+                      </svg>
+                      Fields Changed
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {(() => {
+                      // Parse the update description
+                      const updateText = activity.description.split('Updated')[1]?.trim();
+                      if (!updateText) return null;
+                      
+                      // Extract the number of fields and the field list
+                      const match = updateText.match(/(\d+) fields?: (.*)/);
+                      if (!match) return null;
+                      
+                      const fieldsText = match[2];
+                      const changes = [];
+                      
+                      // Handle different formats - with and without "and X more"
+                      let fieldsList = fieldsText;
+                      if (fieldsText.includes('... and')) {
+                        fieldsList = fieldsText.split('... and')[0];
+                      }
+                      
+                      // Split by commas and process each field change
+                      fieldsList.split(',').forEach(change => {
+                        const trimmedChange = change.trim();
+                        
+                        // Look for field: old → new pattern
+                        const fieldMatch = trimmedChange.match(/([\w_]+): (.+?) → (.+?)(?:$|,)/);
+                        if (fieldMatch) {
+                          const field = fieldMatch[1];
+                          const oldValue = fieldMatch[2];
+                          const newValue = fieldMatch[3];
+                          
+                          // Skip system fields, status fields if filtered, and lead_score (auto-calculated)
+                          if (field === 'last_modified' || field === 'last_modified_by' || 
+                              field === 'lead_score' || 
+                              (activity.customFilter && field === 'status')) {
+                            return;
+                          }
+                          
+                          // Create readable field names
+                          const fieldLabels = {
+                            'follow_up_date': 'Follow-up Date',
+                            'status': 'Status',
+                            'customer_name': 'Customer Name',
+                            'callback_number': 'Phone Number',
+                            'agent_name': 'Agent',
+                            'lead_score': 'Lead Score',
+                            'comments': 'Comments',
+                            'product': 'Product',
+                            'vehicle_year': 'Vehicle Year',
+                            'car_make': 'Car Make',
+                            'car_model': 'Car Model',
+                            'zip_code': 'ZIP Code'
+                          };
+                          
+                          changes.push({
+                            field: fieldLabels[field] || field.replace(/_/g, ' '),
+                            oldValue,
+                            newValue
+                          });
+                        }
+                      });
+                      
+                      return changes.map((change, idx) => (
+                        <div key={idx} className="px-3 py-2 hover:bg-gray-50">
+                          <div className="font-medium text-gray-700">{change.field}</div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <div className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded">{change.oldValue}</div>
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-gray-400">
+                              <path fillRule="evenodd" d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z" clipRule="evenodd" />
+                            </svg>
+                            <div className="px-1.5 py-0.5 bg-amber-50 text-amber-700 rounded">{change.newValue}</div>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+              
+              {/* For status changes */}
+              {activity.activity_type === 'status_change' && (
+                <div className="mt-1 text-xs">
+                  {activity.description.includes('Changed status from') ? (
+                    <div className="flex items-center gap-1">
+                      <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                        {activity.description.split('from "')[1]?.split('"')[0]}
+                      </span>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3 text-gray-400">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                      </svg>
+                      <span className={`px-1.5 py-0.5 rounded ${activity.description.includes('Sale') ? 'bg-green-100 text-green-700' : activity.description.includes('Not Interested') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                        {activity.description.split('to "')[1]?.split('"')[0]}
+                      </span>
+                    </div>
+                  ) : (
+                    activity.description
+                  )}
+                </div>
+              )}
+              
+              {/* For other activity types */}
+              {activity.activity_type !== 'edit' && activity.activity_type !== 'status_change' && (
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {activity.description}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -531,18 +851,25 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
                             </select>
                           </div>
 
-                          <div>
-                            <label htmlFor="follow_up_date" className="block text-sm font-medium text-gray-700">
-                              Follow-up Date
-                            </label>
-                            <DatePicker
-                              selected={followUpDate ? new Date(followUpDate) : null}
-                              onChange={(date) => setValue('follow_up_date', date)}
-                              className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-2 focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                              dateFormat="yyyy-MM-dd"
-                              placeholderText="Select date"
-                            />
-                          </div>
+                          {status === 'Follow-up Later' && (
+                            <div>
+                              <label htmlFor="follow_up_date" className="block text-sm font-medium text-gray-700">
+                                Follow-up Date *
+                              </label>
+                              <DatePicker
+                                selected={followUpDate ? new Date(followUpDate) : null}
+                                onChange={(date) => setValue('follow_up_date', date)}
+                                className={`mt-1 block w-full rounded-md border ${
+                                  status === 'Follow-up Later' && !followUpDate ? 'border-red-500' : 'border-gray-300'
+                                } shadow-sm p-2 focus:border-primary-500 focus:ring-primary-500 sm:text-sm`}
+                                dateFormat="yyyy-MM-dd"
+                                placeholderText="Select date"
+                              />
+                              {status === 'Follow-up Later' && !followUpDate && (
+                                <p className="mt-1 text-sm text-red-500">Required for "Follow-up Later" status</p>
+                              )}
+                            </div>
+                          )}
 
                           <div>
                             <label htmlFor="lead_score" className="block text-sm font-medium text-gray-700">
@@ -632,6 +959,43 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
                           </svg>
                           Activity Timeline
                         </h3>
+                        
+                        {/* Activity Type Filters */}
+                        <div className="flex flex-wrap gap-1.5 mb-4">
+                          {Object.keys(ACTIVITY_TYPE_CONFIG).map(type => (
+                            <button
+                              key={type}
+                              onClick={() => {
+                                if (activeFilters.includes(type)) {
+                                  setActiveFilters(activeFilters.filter(t => t !== type));
+                                } else {
+                                  setActiveFilters([...activeFilters, type]);
+                                }
+                              }}
+                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium 
+                                ${activeFilters.includes(type) 
+                                  ? `${ACTIVITY_TYPE_CONFIG[type].color} ${ACTIVITY_TYPE_CONFIG[type].bgColor}` 
+                                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                            >
+                              <span className="mr-1">{ACTIVITY_TYPE_CONFIG[type].icon}</span>
+                              {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
+                              {activeFilters.includes(type) && (
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 ml-1">
+                                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                                </svg>
+                              )}
+                            </button>
+                          ))}
+                          {activeFilters.length > 0 && (
+                            <button
+                              onClick={() => setActiveFilters([])}
+                              className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            >
+                              Clear filters
+                            </button>
+                          )}
+                        </div>
+                        
                         <div className="relative">
                           {/* Center line */}
                           <div className="absolute left-3 top-0 bottom-0 w-px bg-gray-200"></div>
@@ -671,126 +1035,15 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
                               <p>No activity history available</p>
                             </div>
                           ) : (
-                            <div className="space-y-8">
-                              {activities.map((activity) => (
-                                <div key={activity.id} className="relative flex items-start">
-                                  {/* Activity dot in the timeline */}
-                                  <div className="absolute left-3 -ml-1.5 mt-1.5">
-                                    <div className={`h-3 w-3 rounded-full border-2 border-white ${ACTIVITY_TYPE_CONFIG[activity.activity_type]?.bgColor || 'bg-gray-200'}`}></div>
-                                  </div>
-                                  
-                                  {/* Activity card - minimalist design */}
-                                  <div className="ml-8 flex-1 mb-5">
-                                    <div className="flex items-start gap-2">
-                                      {/* Activity icon */}
-                                      <div className={`flex-shrink-0 mt-0.5 ${ACTIVITY_TYPE_CONFIG[activity.activity_type]?.bgColor || 'bg-gray-100'} ${ACTIVITY_TYPE_CONFIG[activity.activity_type]?.color || 'text-gray-600'} p-1 rounded-md`}>
-                                        {ACTIVITY_TYPE_CONFIG[activity.activity_type]?.icon || (
-                                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 13.5V3.75m0 9.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 3.75V16.5m12-3V3.75m0 9.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 3.75V16.5m-6-9V3.75m0 3.75a1.5 1.5 0 010 3m0-3a1.5 1.5 0 000 3m0 9.75V10.5" />
-                                          </svg>
-                                        )}
-                                      </div>
-                                      
-                                      {/* Activity content */}
-                                      <div className="flex-1">
-                                        <div className="flex justify-between">
-                                          <div className="text-sm">
-                                            <span className="font-medium text-gray-900">
-                                              {activity.user?.username || 
-                                               (activity.user_id === "Admin User" ? "Admin" : 
-                                               (activity.user_id === "c7236aa1-2591-4b0f-b619-e9a69fb86c4b" && !activity.user ? "jannet" : 
-                                               activity.user_id || 'System'))}
-                                            </span>
-                                            <span className="text-gray-500"> {ACTIVITY_TYPE_CONFIG[activity.activity_type]?.label || activity.activity_type}</span>
-                                          </div>
-                                          <time dateTime={new Date(activity.created_at).toISOString()} className="text-xs text-gray-400">
-                                            {format(new Date(activity.created_at), 'MMM d, h:mm a')}
-                                          </time>
-                                        </div>
-                                        
-                                        {/* Edit details formatting */}
-                                        {activity.activity_type === 'edit' && activity.description.includes('Updated') && (
-                                          <div className="mt-1 text-xs text-gray-600 bg-gray-50 rounded-md p-2 space-y-1">
-                                            {activity.description.split('Updated')[1].split(':')[1]?.split(',').map((change, idx) => {
-                                              // Skip if we've reached the "and X more" part
-                                              if (change.includes('and') && change.includes('more')) return null;
-                                              
-                                              // Format the change text to be more readable
-                                              let formattedChange = change.trim()
-                                                .replace('follow_up_date', 'Follow-up Date')
-                                                .replace('status', 'Status')
-                                                .replace('customer_name', 'Customer Name')
-                                                .replace('callback_number', 'Phone Number')
-                                                .replace('agent_name', 'Agent')
-                                                .replace('lead_score', 'Lead Score')
-                                                .replace('comments', 'Comments')
-                                                .replace('product', 'Product')
-                                                .replace('vehicle_year', 'Vehicle Year')
-                                                .replace('car_make', 'Car Make')
-                                                .replace('car_model', 'Car Model')
-                                                .replace('zip_code', 'ZIP Code')
-                                                .replace('last_modified', 'Last Modified')
-                                                .replace('last_modified_by', 'Modified By');
-                                              
-                                              // Don't display last_modified changes
-                                              if (formattedChange.includes('Last Modified')) {
-                                                return null;
-                                              }
-                                              
-                                              // Format the change to show in a more readable way
-                                              const parts = formattedChange.split('→');
-                                              if (parts.length === 2) {
-                                                const fieldParts = parts[0].split(':');
-                                                if (fieldParts.length === 2) {
-                                                  return (
-                                                    <div key={idx} className="flex items-baseline">
-                                                      <span className="font-medium">{fieldParts[0].trim()}:</span>
-                                                      <div className="flex items-center gap-1 ml-1">
-                                                        <span className="text-gray-500">{fieldParts[1].trim()}</span>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3 text-gray-400">
-                                                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                                                        </svg>
-                                                        <span className="text-gray-900">{parts[1].trim()}</span>
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                }
-                                              }
-                                              
-                                              return <div key={idx}>{formattedChange}</div>;
-                                            }).filter(Boolean)}
-                                          </div>
-                                        )}
-                                        
-                                        {/* For status changes */}
-                                        {activity.activity_type === 'status_change' && (
-                                          <div className="mt-1 text-xs">
-                                            {activity.description.includes('Changed status from') ? (
-                                              <div className="flex items-center gap-1">
-                                                <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
-                                                  {activity.description.split('from "')[1]?.split('"')[0]}
-                                                </span>
-                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3 h-3 text-gray-400">
-                                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                                                </svg>
-                                                <span className={`px-1.5 py-0.5 rounded ${activity.description.includes('Sale') ? 'bg-green-100 text-green-700' : activity.description.includes('Not Interested') ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                  {activity.description.split('to "')[1]?.split('"')[0]}
-                                                </span>
-                                              </div>
-                                            ) : (
-                                              activity.description
-                                            )}
-                                          </div>
-                                        )}
-                                        
-                                        {/* For other activity types */}
-                                        {activity.activity_type !== 'edit' && activity.activity_type !== 'status_change' && (
-                                          <div className="text-xs text-gray-500 mt-0.5">
-                                            {activity.description}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
+                            <div className="space-y-4">
+                              {/* Group activities by date */}
+                              {groupActivitiesByDate(activities).map(group => (
+                                <div key={group.dateKey} className="mb-6">
+                                  <h4 className="text-xs font-medium text-gray-500 mb-3 sticky top-0 bg-white py-1">
+                                    {group.label}
+                                  </h4>
+                                  <div className="space-y-5">
+                                    {group.activities.map(activity => renderActivity(activity))}
                                   </div>
                                 </div>
                               ))}

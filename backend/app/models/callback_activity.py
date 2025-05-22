@@ -21,7 +21,7 @@ class CallbackActivity(Base):
     user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     activity_type = Column(String(50), nullable=False)  # view, edit, claim, comment, status_change
     description = Column(Text, nullable=True)
-    created_at = Column(TZDateTime, default=datetime.now(tz=settings.TIMEZONE_OBJ))
+    created_at = Column(TZDateTime, default=lambda: datetime.now(tz=settings.TIMEZONE_OBJ))
     
     # Previous and new values for tracking changes (stored as JSON strings)
     previous_value = Column(Text, nullable=True)

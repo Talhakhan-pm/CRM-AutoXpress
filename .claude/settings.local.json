@@ -6,7 +6,8 @@
       "Bash(source:*)",
       "Bash(alembic upgrade:*)",
       "Bash(pip install:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }
