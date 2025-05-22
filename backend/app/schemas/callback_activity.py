@@ -29,11 +29,24 @@ class CallbackActivityInDB(CallbackActivityBase):
     class Config:
         from_attributes = True
 
+class UserInfo(BaseModel):
+    """
+    Simplified user information for inclusion in activity responses
+    """
+    id: str
+    username: str
+    
+    class Config:
+        from_attributes = True
+
 class CallbackActivityResponse(CallbackActivityInDB):
     """
     Schema for activity response object
     """
-    pass
+    user: Optional[UserInfo] = None
+    
+    class Config:
+        from_attributes = True
 
 # Activity types for validation
 ACTIVITY_TYPES = [

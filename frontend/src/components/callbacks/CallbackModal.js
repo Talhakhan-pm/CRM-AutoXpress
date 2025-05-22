@@ -695,7 +695,12 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
                                       <div className="flex-1">
                                         <div className="flex justify-between">
                                           <div className="text-sm">
-                                            <span className="font-medium text-gray-900">{activity.user?.username || activity.user_id || 'System'}</span>
+                                            <span className="font-medium text-gray-900">
+                                              {activity.user?.username || 
+                                               (activity.user_id === "Admin User" ? "Admin" : 
+                                               (activity.user_id === "c7236aa1-2591-4b0f-b619-e9a69fb86c4b" && !activity.user ? "jannet" : 
+                                               activity.user_id || 'System'))}
+                                            </span>
                                             <span className="text-gray-500"> {ACTIVITY_TYPE_CONFIG[activity.activity_type]?.label || activity.activity_type}</span>
                                           </div>
                                           <time dateTime={new Date(activity.created_at).toISOString()} className="text-xs text-gray-400">

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from datetime import datetime
 
@@ -15,6 +15,8 @@ from app.schemas.callback_activity import (
     CallbackActivityResponse,
     ACTIVITY_TYPES,
 )
+from app.models.callback_activity import CallbackActivity
+from app.models.user import User
 
 router = APIRouter()
 
@@ -34,13 +36,14 @@ def read_callback_activities(
     if db_callback is None:
         raise HTTPException(status_code=404, detail="Callback not found")
     
-    # Get activities
-    activities = get_activities_by_callback(
-        db=db,
-        callback_id=callback_id,
-        skip=skip,
-        limit=limit
-    )
+    # Get activities with user relationship loaded (for username)
+    activities = db.query(CallbackActivity)\
+        .filter(CallbackActivity.callback_id == callback_id)\
+        .order_by(CallbackActivity.created_at.desc())\
+        .options(joinedload(CallbackActivity.user))\
+        .offset(skip)\
+        .limit(limit)\
+        .all()
     
     return activities
 
@@ -66,7 +69,11 @@ def record_view_activity(
         user_id=user_id
     )
     
-    return activity
+    # Reload the activity with user data
+    return db.query(CallbackActivity)\
+        .filter(CallbackActivity.id == activity.id)\
+        .options(joinedload(CallbackActivity.user))\
+        .first()
 
 
 @router.post("/{callback_id}", response_model=CallbackActivityResponse)
@@ -95,4 +102,10 @@ def create_callback_activity(
     activity_data["callback_id"] = callback_id
     
     # Create activity
-    return create_activity(db=db, activity=CallbackActivityCreate(**activity_data))
+    created_activity = create_activity(db=db, activity=CallbackActivityCreate(**activity_data))
+    
+    # Reload the activity with user data
+    return db.query(CallbackActivity)\
+        .filter(CallbackActivity.id == created_activity.id)\
+        .options(joinedload(CallbackActivity.user))\
+        .first()
