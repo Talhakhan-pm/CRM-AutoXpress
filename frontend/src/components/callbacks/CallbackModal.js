@@ -114,6 +114,7 @@ const formatPhoneNumber = (value) => {
 
 export default function CallbackModal({ isOpen, onClose, callback, onSave, title }) {
   const { user } = useAuth(); // Get current user from auth context
+  // Initialize form with default empty values
   const {
     register,
     handleSubmit,
@@ -122,7 +123,8 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
     formState: { errors },
     reset,
   } = useForm({
-    defaultValues: callback || {
+    // Only set minimal default values that will be overridden by reset()
+    defaultValues: {
       status: 'Pending',
       agent_name: AGENTS[0],
     },
@@ -210,40 +212,53 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
 
   // Reset form when modal opens with new data
   useEffect(() => {
-    if (isOpen && callback) {
-      // Format the date from string to Date object if it exists
-      const formattedCallback = { 
-        ...callback,
-        follow_up_date: callback.follow_up_date ? new Date(callback.follow_up_date) : null,
-      };
-      
-      // Reset form with the callback data
-      reset(formattedCallback);
-      
-      // Fetch activities when opening an existing callback
-      if (callback.id) {
-        setIsLoadingActivities(true);
-        import('../../services/api').then(({ activitiesApi }) => {
-          // Record view activity when opening the modal
-          if (user?.id) {
-            activitiesApi.recordView(callback.id, user.id)
-              .catch(err => console.error('Error recording view:', err));
-          }
-          
-          // Fetch activities
-          activitiesApi.getActivities(callback.id)
-            .then(data => {
-              setActivities(data);
-              setLoadingError(null);
-            })
-            .catch(err => {
-              console.error('Error fetching activities:', err);
-              setLoadingError('Failed to load activity history');
-            })
-            .finally(() => {
-              setIsLoadingActivities(false);
-            });
+    if (isOpen) {
+      if (callback) {
+        // Format the date from string to Date object if it exists
+        const formattedCallback = { 
+          ...callback,
+          follow_up_date: callback.follow_up_date ? new Date(callback.follow_up_date) : null,
+        };
+        
+        // Reset form with the callback data
+        reset(formattedCallback);
+        
+        // Fetch activities when opening an existing callback
+        if (callback.id) {
+          setIsLoadingActivities(true);
+          import('../../services/api').then(({ activitiesApi }) => {
+            // Record view activity when opening the modal
+            if (user?.id) {
+              activitiesApi.recordView(callback.id, user.id)
+                .catch(err => console.error('Error recording view:', err));
+            }
+            
+            // Fetch activities
+            activitiesApi.getActivities(callback.id)
+              .then(data => {
+                setActivities(data);
+                setLoadingError(null);
+              })
+              .catch(err => {
+                console.error('Error fetching activities:', err);
+                setLoadingError('Failed to load activity history');
+              })
+              .finally(() => {
+                setIsLoadingActivities(false);
+              });
+          });
+        }
+      } else {
+        // For new callbacks, reset to default empty state
+        reset({
+          status: 'Pending',
+          agent_name: AGENTS[0],
         });
+        
+        // Clear activities for new callbacks
+        setActivities([]);
+        setIsLoadingActivities(false);
+        setLoadingError(null);
       }
     }
   }, [isOpen, callback, reset, user]);
