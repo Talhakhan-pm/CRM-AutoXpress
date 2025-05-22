@@ -126,7 +126,6 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
     // Only set minimal default values that will be overridden by reset()
     defaultValues: {
       status: 'Pending',
-      agent_name: AGENTS[0],
     },
   });
 
@@ -252,7 +251,6 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
         // For new callbacks, reset to default empty state
         reset({
           status: 'Pending',
-          agent_name: AGENTS[0],
         });
         
         // Clear activities for new callbacks
@@ -282,6 +280,7 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
       vehicle_year: data.vehicle_year ? parseInt(data.vehicle_year, 10) : null,
       lead_score: data.lead_score ? parseFloat(data.lead_score) : null,
       callback_number: formattedPhone || data.callback_number, // Use formatted phone number
+      agent_name: user?.username || "Current User", // Use the current user's username
       last_modified_by: user?.id || 'unknown', // Use the current user ID for tracking
     };
     
@@ -850,20 +849,20 @@ export default function CallbackModal({ isOpen, onClose, callback, onSave, title
                           </div>
 
                           <div>
-                            <label htmlFor="agent_name" className="block text-sm font-medium text-gray-700">
-                              Agent Name
+                            <label className="block text-sm font-medium text-gray-700">
+                              Agent
                             </label>
-                            <select
-                              id="agent_name"
-                              {...register('agent_name')}
-                              className="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-2 focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                            >
-                              {AGENTS.map((agent) => (
-                                <option key={agent} value={agent}>
-                                  {agent}
-                                </option>
-                              ))}
-                            </select>
+                            <div className="mt-1 flex items-center gap-2">
+                              <div className="px-3 py-2 bg-gray-100 rounded-md text-gray-700 border border-gray-200 w-full">
+                                <div className="flex items-center">
+                                  <div className="h-6 w-6 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xs font-medium mr-2">
+                                    {user?.username?.charAt(0)?.toUpperCase() || 'U'}
+                                  </div>
+                                  <span>{user?.username || "Current User"}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500">Automatically assigned to you</p>
                           </div>
 
                           {status === 'Follow-up Later' && (
